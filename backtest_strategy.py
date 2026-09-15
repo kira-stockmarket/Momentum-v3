@@ -20,16 +20,26 @@ MAX_OPEN_POSITIONS = 5
 
 def run_backtest():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    print("Loading dataset for 5-Year Portfolio Backtest...")
+    print("Loading dataset for 5-Year Event-Driven Portfolio Backtest...")
     
     df = pd.read_parquet(DATA_FILE)
     
-    # 1. TIMELINE SETUP (Assuming date column is named 'Date')
-    # If your date column has a different name (e.g., 'date', 'timestamp'), change it here
-    date_col = 'Date' 
-    df[date_col] = pd.to_datetime(df[date_col])
+    # 1. SMART TIMELINE SETUP: Auto-detect the date column
+    possible_date_cols = ['date', 'Date', 'timestamp', 'datetime', 'Date/Time', 'time']
+    date_col = None
+    for col in possible_date_cols:
+        if col in df.columns:
+            date_col = col
+            break
+            
+    if date_col is None:
+        print(f"ERROR: Available columns are: {list(df.columns)}")
+        raise KeyError("Could not find a date column in the dataset! Please check the column names printed above.")
+        
+    print(f"Detected timeline column: '{date_col}'")
     
-    # Crucial for event-driven simulation: sort by Date!
+    # Convert and sort chronologically
+    df[date_col] = pd.to_datetime(df[date_col])
     df = df.sort_values(date_col).reset_index(drop=True)
     
     # 2. STRICT 5-YEAR OUT-OF-SAMPLE SPLIT
@@ -69,11 +79,12 @@ def run_backtest():
         current_idx = row.Index
         current_date = getattr(row, date_col)
         
-        # Manage Existing Open Positions
+        # 1. Manage Existing Open Positions
         positions_to_remove = []
         for pos in open_positions:
             days_held = current_idx - pos['entry_idx']
             
+            # Check stops and targets (SL checked first)
             hit_sl = getattr(row, 'Low') <= pos['sl_price']
             hit_tp = getattr(row, 'High') >= pos['tp_price']
             time_stop = days_held >= TIME_STOP
@@ -99,7 +110,7 @@ def run_backtest():
         for pos in positions_to_remove:
             open_positions.remove(pos)
             
-        # Process New Signals
+        # 2. Process New Signals (Entry at Close)
         if getattr(row, 'signal'):
             if len(open_positions) < MAX_OPEN_POSITIONS:
                 current_open_value = sum([p['capital_allocated'] * (getattr(row, 'Close') / p['entry_price']) for p in open_positions])
@@ -117,11 +128,11 @@ def run_backtest():
                     })
                     available_cash -= position_size
                     
-        # Record Daily Portfolio Equity
+        # 3. Record Daily Portfolio Equity
         current_open_value = sum([p['capital_allocated'] * (getattr(row, 'Close') / p['entry_price']) for p in open_positions])
         daily_equity = available_cash + current_open_value
         
-        # Only append to curve if the date changed (to prevent plotting overlapping intraday rows)
+        # Only append to curve if the date changed
         if len(equity_curve_dates) == 0 or equity_curve_dates[-1] != current_date:
             equity_curve_dates.append(current_date)
             equity_curve_values.append(daily_equity)
@@ -163,11 +174,10 @@ def run_backtest():
             
         plt.figure(figsize=(12, 6))
         plt.plot(equity_curve_dates, equity_curve_values, color='darkorange', linewidth=2)
-        plt.title(f"5-Year Equity Curve (₹100k Initial Capital)")
+        plt.title(f"5-Year Equity Curve (₹100,000 Initial Capital)")
         plt.xlabel("Date")
         plt.ylabel("Portfolio Value (₹)")
         plt.grid(True, alpha=0.3)
-        # Format X-axis for better date reading
         plt.gcf().autofmt_xdate()
         plt.savefig(os.path.join(OUTPUT_DIR, "equity_curve.png"), bbox_inches='tight', dpi=300)
         plt.close()
