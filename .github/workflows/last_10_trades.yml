@@ -1,0 +1,27 @@
+name: Get Last 10 Trades Report
+
+on:
+  # Allows you to manually trigger this report anytime from the GitHub Actions tab
+  workflow_dispatch: 
+
+jobs:
+  run-report:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Last 10 Trades Script
+        run: |
+          python get_last_10_trades.py
