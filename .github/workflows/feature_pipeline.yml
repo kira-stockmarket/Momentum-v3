@@ -1,0 +1,54 @@
+name: NIFTY 50 Feature Engineering
+
+on:
+  workflow_dispatch: # Allows you to trigger it manually whenever you want
+  workflow_run:
+    # Automatically runs this right after the Data Downloader finishes successfully
+    workflows: ["NIFTY 50 Data Downloader"]
+    types:
+      - completed
+
+jobs:
+  build-and-commit-dataset:
+    # Only run if the previous workflow actually succeeded, or if manually triggered
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    
+    # Required to push the new dataset back to the repository
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Feature Engineering Script
+        run: python build_features.py
+
+      - name: Commit and Push Dataset
+        run: |
+          # Configure Git to act as a GitHub Action bot
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # Add the newly created dataset
+          git add dataset.parquet
+          
+          # Only commit if the dataset has actually changed
+          if git diff --staged --quiet; then
+            echo "No changes to commit for dataset.parquet"
+          else
+            git commit -m "Auto-generate 15-day pre-breakout ML features"
+            git push
+          fi
