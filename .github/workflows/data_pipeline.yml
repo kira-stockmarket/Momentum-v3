@@ -3,16 +3,23 @@ name: NIFTY 50 Data Downloader
 on:
   workflow_dispatch: # Allows manual trigger from the GitHub UI
   schedule:
-    # Runs automatically every Friday at 20:00 UTC (after Indian markets close)
+    # Runs automatically every Friday at 20:00 UTC
     - cron: '0 20 * * 5'
 
 jobs:
-  download-market-data:
+  download-and-commit-data:
     runs-on: ubuntu-latest
+    
+    # You MUST grant write permissions for the Action to push code
+    permissions:
+      contents: write
     
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          # Required to fetch full history so we can push back
+          fetch-depth: 0 
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -26,9 +33,19 @@ jobs:
       - name: Run Downloader Script
         run: python download_nifty50.py
 
-      - name: Upload Parquet Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: nifty50-historical-parquet
-          path: nifty50_data/*.parquet
-          retention-days: 7 # Stores the data for 1 week for training pipelines
+      - name: Commit and Push Parquet Files
+        run: |
+          # Configure Git to act as a GitHub Action bot
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # Add the newly created nifty50_data directory
+          git add nifty50_data/*.parquet
+          
+          # Only commit if there are changes (prevents pipeline failure if data is identical)
+          if git diff --staged --quiet; then
+            echo "No new data to commit"
+          else
+            git commit -m "Auto-update NIFTY 50 historical data"
+            git push
+          fi
