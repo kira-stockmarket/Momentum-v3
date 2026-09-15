@@ -17,9 +17,27 @@ def engineer_features_for_stock(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
     # Clean zero / missing volumes
     df['Volume'] = df['Volume'].replace(0, np.nan).ffill()
 
-    # --- 1. TARGET LABELING (Look-ahead 21 trading days = ~1 month) ---
+   # --- 1. TARGET LABELING (Look-ahead 21 trading days = ~1 month) ---
+    # Find the maximum close in the next 21 days
     indexer_fwd = pd.api.indexers.FixedForwardWindowIndexer(window_size=21)
     df['fwd_max_close_21'] = df['Close'].rolling(window=indexer_fwd).max()
+    
+    # Calculate the forward maximum return
+    df['fwd_return_21'] = (df['fwd_max_close_21'] - df['Close']) / df['Close']
+    
+    # --- NEW: THE "FRESH BREAKOUT" FILTER ---
+    # Find the minimum close in the PAST 21 days
+    df['past_min_close_21'] = df['Close'].rolling(window=21).min()
+    
+    # Calculate how much it has already run up from its recent low
+    df['past_runup_21'] = (df['Close'] - df['past_min_close_21']) / df['past_min_close_21']
+    
+    # It is only a valid target IF it surges >= 20% going forward, 
+    # AND it hasn't already run up more than 10% in the recent past (it was consolidating)
+    is_massive_surge = df['fwd_return_21'] >= 0.20
+    is_consolidating = df['past_runup_21'] <= 0.10
+    
+    df['target_breakout_20'] = (is_massive_surge & is_consolidating).astype(int)
     
     # Forward max return: (fwd_max - current_close) / current_close
     df['fwd_return_21'] = (df['fwd_max_close_21'] - df['Close']) / df['Close']
