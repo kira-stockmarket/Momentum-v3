@@ -1,0 +1,5 @@
+yfinance
+pandas
+pyarrow
+fastparquet
+lxml
