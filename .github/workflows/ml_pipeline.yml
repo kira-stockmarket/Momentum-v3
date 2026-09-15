@@ -1,0 +1,39 @@
+name: Model Training & Insights Extraction
+
+on:
+  workflow_dispatch: # Allows you to run it manually at any time
+  workflow_run:
+    # Trigger automatically after the dataset generation is complete
+    workflows: ["NIFTY 50 Feature Engineering"]
+    types:
+      - completed
+
+jobs:
+  train-and-explain:
+    # Only run if the previous workflow succeeded, or if triggered manually
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Train Model & Generate SHAP Insights
+        run: python train_and_explain.py
+
+      - name: Upload ML Insights as Artifact
+        # Using v4 of the artifact action for faster uploads
+        uses: actions/upload-artifact@v4
+        with:
+          name: momentum-breakout-insights
+          path: ml_insights/
+          retention-days: 7 # Keeps the ZIP file available for 7 days
