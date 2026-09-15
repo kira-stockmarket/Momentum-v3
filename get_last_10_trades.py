@@ -13,7 +13,7 @@ INITIAL_CAPITAL = 100000.0
 MAX_OPEN_POSITIONS = 5
 
 def get_last_10_trades():
-    print("Loading dataset for 70%+ conviction trade log extraction...")
+    print("Loading dataset and running trade log extraction with strict exit verification...")
     
     if not os.path.exists(DATA_FILE):
         print(f"Error: {DATA_FILE} not found.")
@@ -37,7 +37,7 @@ def get_last_10_trades():
     X_train, y_train = train_df[feature_cols], train_df['target_breakout_20']
     X_test = test_df[feature_cols]
     
-    print("Training LightGBM model to evaluate out-of-sample trades...")
+    print("Training LightGBM model...")
     scale_pos_weight = (y_train == 0).sum() / (y_train == 1).sum() if (y_train == 1).sum() > 0 else 1.0
     
     model = lgb.LGBMClassifier(
@@ -59,7 +59,7 @@ def get_last_10_trades():
         current_date = row.date
         current_ticker = row.ticker
         
-        # 1. Manage active open positions
+        # 1. Manage active open positions with strict exit precedence
         positions_to_remove = []
         for pos in open_positions:
             days_held = current_idx - pos['entry_idx']
@@ -69,9 +69,18 @@ def get_last_10_trades():
             time_stop = days_held >= TIME_STOP
             
             exit_price = None
-            if hit_sl: exit_price = pos['sl_price']
-            elif hit_tp: exit_price = pos['tp_price']
-            elif time_stop: exit_price = getattr(row, 'Close')
+            exit_reason = None
+            
+            # Conservative rule: If both SL and TP happen on the same day, SL takes precedence
+            if hit_sl:
+                exit_price = pos['sl_price']
+                exit_reason = 'SL Hit (-6%)'
+            elif hit_tp:
+                exit_price = pos['tp_price']
+                exit_reason = 'TP Hit (+20%)'
+            elif time_stop:
+                exit_price = getattr(row, 'Close')
+                exit_reason = 'Time Stop'
                 
             if exit_price is not None:
                 gross_return = (exit_price - pos['entry_price']) / pos['entry_price']
@@ -81,6 +90,7 @@ def get_last_10_trades():
                 
                 pos['exit_date'] = current_date.strftime('%Y-%m-%d')
                 pos['exit_price'] = exit_price
+                pos['exit_reason'] = exit_reason
                 pos['return_pct'] = net_return * 100
                 trade_logs.append(pos)
                 positions_to_remove.append(pos)
@@ -109,10 +119,10 @@ def get_last_10_trades():
                 open_positions.append(new_pos)
                 available_cash -= position_size
 
-    # 3. EXTRACT LAST 10 TRADES
-    print("\n" + "=" * 90)
-    print("🎯 LAST 10 COMPLETED TRADES (70%+ PROBABILITY CONVICTION) 🎯")
-    print("=" * 90)
+    # 3. EXTRACT LAST 10 TRADES WITH EXPLICIT EXIT REASONS
+    print("\n" + "=" * 105)
+    print("🎯 LAST 10 COMPLETED TRADES (VERIFIED EXIT REASONS) 🎯")
+    print("=" * 105)
     
     if len(trade_logs) == 0:
         print("No completed trades found meeting the strict 70% threshold.")
@@ -120,13 +130,13 @@ def get_last_10_trades():
         
     last_10 = trade_logs[-10:]
     
-    print(f"{'ENTRY DATE':<12} | {'TICKER':<10} | {'PROB':<6} | {'ENTRY (₹)':<10} | {'TARGET (+20%)':<14} | {'SL (-6%)':<10} | {'RETURN':<8}")
-    print("-" * 90)
+    print(f"{'ENTRY DATE':<12} | {'TICKER':<10} | {'PROB':<6} | {'ENTRY (₹)':<10} | {'EXIT REASON':<16} | {'RETURN':<8}")
+    print("-" * 105)
     
     for t in last_10:
-        print(f"{t['entry_date']:<12} | {t['ticker']:<10} | {t['probability']:>4.1f}%  | ₹{t['entry_price']:<9.2f} | ₹{t['tp_price']:<13.2f} | ₹{t['sl_price']:<9.2f} | {t['return_pct']:>+.2f}%")
+        print(f"{t['entry_date']:<12} | {t['ticker']:<10} | {t['probability']:>4.1f}%  | ₹{t['entry_price']:<9.2f} | {t['exit_reason']:<16} | {t['return_pct']:>+.2f}%")
         
-    print("=" * 90)
+    print("=" * 105)
 
 if __name__ == "__main__":
     get_last_10_trades()
