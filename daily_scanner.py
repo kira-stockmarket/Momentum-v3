@@ -3,7 +3,7 @@ import lightgbm as lgb
 import datetime
 
 DATA_FILE = "dataset.parquet"
-PROBA_THRESHOLD = 0.70
+PROBA_THRESHOLD = 0.50
 
 def run_daily_scanner():
     print("--- DAILY BREAKOUT SCANNER (TODAY ONLY) ---")
