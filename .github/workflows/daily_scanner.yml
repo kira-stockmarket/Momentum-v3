@@ -5,7 +5,7 @@ on:
     # Runs at 09:45 UTC (3:15 PM IST) on Monday through Friday
     - cron: '45 9 * * 1-5'
   
-  # Allows you to trigger the scanner manually from the GitHub Actions tab
+  # Allows you to trigger the scanner manually
   workflow_dispatch: 
 
 jobs:
@@ -24,13 +24,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pandas numpy lightgbm pyarrow fastparquet
-          # Add any other libraries your data_fetcher.py requires here
-
-      - name: Fetch Latest Market Data
-        run: |
-          # Replace 'data_fetcher.py' with your actual data pipeline script
-          python data_fetcher.py 
+          pip install -r requirements.txt
 
       - name: Run Daily Scanner
         run: |
