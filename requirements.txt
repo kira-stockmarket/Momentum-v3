@@ -6,3 +6,6 @@ lxml
 requests
 scikit-learn
 numpy
+lightgbm
+shap
+matplotlib
