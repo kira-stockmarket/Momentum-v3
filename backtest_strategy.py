@@ -16,7 +16,7 @@ FRICTION = 0.0015
 
 # --- PORTFOLIO RISK RULES ---
 INITIAL_CAPITAL = 100000.0
-MAX_OPEN_POSITIONS = 5
+MAX_OPEN_POSITIONS = 20
 
 def run_backtest():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
